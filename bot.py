@@ -1,65 +1,64 @@
-import discord
-import random
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
 import os
+import random
+import discord
+from discord.ext import tasks
+from datetime import datetime, timedelta
+import pytz
 
-# Token & Channel-ID kommen aus Railway Variablen
-TOKEN = os.getenv("DISCORD_TOKEN")
-CHANNEL_ID = int(os.getenv("CHANNEL_ID"))
+from flask import Flask
+from threading import Thread
+
+# --- Keep Alive Webserver ---
+app = Flask('')
+
+@app.route('/')
+def home():
+    return "I'm alive!"
+
+def run():
+    app.run(host='0.0.0.0', port=8080)
+
+def keep_alive():
+    t = Thread(target=run)
+    t.start()
+
+# --- Discord Bot Setup ---
+TOKEN = os.environ['DISCORD_TOKEN']
+CHANNEL_ID = int(os.environ['CHANNEL_ID'])
 
 intents = discord.Intents.default()
 client = discord.Client(intents=intents)
-scheduler = AsyncIOScheduler(timezone="Europe/Berlin")
 
-# Essen + Wahrscheinlichkeiten
-FOODS = [
-    ("Spinat", 0.55, "Heute ist Spinattag! Yippie!"),
-    ("Pizza", 0.25, "Heute ist Pizzatag! Guten Appetit!"),
-    ("Pommes", 0.15, "Heute gibt es Pommes! 🍟"),
-    ("Gulasch", 0.0025, "Wow, heute gibt es Gulasch! Seltenheit pur!"),
-    ("Buchstabensuppe", 0.0025, "Heute gibt es Buchstabensuppe! 🔤🍲"),
-    ("Nesquik", 0.0025, "Überraschung! Nesquik-Tag 🥛🍫"),
-]
+tz = pytz.timezone("Europe/Berlin")
 
-last_food = None  # merken, was gestern war
-streak = 0        # wie viele Tage in Folge das gleiche Essen war
-
-def pick_food():
-    global last_food, streak
-
-    # Extra-Logik: Spinat darf öfter hintereinander kommen
-    if last_food == "Spinat" and streak < 2:
-        streak += 1
-        return "Spinat", "Heute ist Spinattag! Yippie!"
+def choose_food():
+    r = random.random()
+    if r < 0.70:
+        return "Heute ist Spinattag! 🥬 Yippie!"
+    elif r < 0.90:
+        return "Heute gibt’s Pizza! 🍕"
+    elif r < 0.98:
+        return "Pommes-Tag! 🍟"
+    elif r < 0.989:
+        return "Oh wow, Gulasch! 🍲"
+    elif r < 0.998:
+        return "Buchstabensuppe-Tag! 🍜"
     else:
-        # normale Zufallsauswahl nach Gewicht
-        names = [f[0] for f in FOODS]
-        weights = [f[1] for f in FOODS]
-        choice = random.choices(FOODS, weights=weights, k=1)[0]
-        food, _, message = choice
-
-        if food == last_food:
-            streak += 1
-        else:
-            streak = 1
-        last_food = food
-        return food, message
-
-async def send_daily_message():
-    await client.wait_until_ready()
-    channel = client.get_channel(CHANNEL_ID)
-    if channel is None:
-        print("❗ Channel nicht gefunden – stimmt die ID?")
-        return
-
-    _, message = pick_food()
-    await channel.send(message)
+        return "Überraschung: Nesquik! 🥛"
 
 @client.event
 async def on_ready():
-    print(f"✅ Eingeloggt als {client.user}")
-    scheduler.add_job(send_daily_message, "cron", hour=9, minute=0)
-    scheduler.start()
-    print("⏰ Tägliche Vorhersage für 09:00 geplant (Berlin-Zeit).")
+    print(f"Eingeloggt als {client.user}")
+    send_daily_message.start()
 
+@tasks.loop(minutes=1)
+async def send_daily_message():
+    now = datetime.now(tz)
+    if now.hour == 9 and now.minute == 0:  # genau 09:00 Uhr
+        channel = client.get_channel(CHANNEL_ID)
+        if channel:
+            await channel.send(choose_food())
+
+# --- Start ---
+keep_alive()
 client.run(TOKEN)
