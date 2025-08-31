@@ -4,8 +4,8 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 import os
 
 # Token & Channel-ID kommen aus Railway Variablen
-TOKEN = os.getenv("MTQxMTQzNjM5NTQ3MzY3MDIzNg")
-CHANNEL_ID = int(os.getenv("1411452316699197542"))
+TOKEN = os.getenv("DISCORD_TOKEN")
+CHANNEL_ID = int(os.getenv("CHANNEL_ID"))
 
 intents = discord.Intents.default()
 client = discord.Client(intents=intents)
